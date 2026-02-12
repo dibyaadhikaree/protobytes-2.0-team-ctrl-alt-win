@@ -19,6 +19,8 @@ export default function Login() {
 
     Alert.alert("Logged in ✅", "Next step: connect backend auth.");
     // later: router.replace("/(tabs)/home") or your home route
+    router.replace("/(app)/home");
+
   };
 
   return (
@@ -39,7 +41,7 @@ export default function Login() {
       </Text>
 
       <Text style={{ color: COLORS.muted, marginTop: 8, lineHeight: 20 }}>
-        Offline-first payment app. Login to continue.
+        Nepal's first offline payment method . Login to continue.
       </Text>
 
       {/* Card */}

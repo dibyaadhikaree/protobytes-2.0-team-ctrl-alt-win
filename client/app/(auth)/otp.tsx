@@ -124,8 +124,8 @@ export default function OtpVerification() {
           </Text>
         </Pressable>
 
-        <Text style={{ color: COLORS.muted, textAlign: "center" }}>
-          Wrong number?{" "}
+         <Text style={{ color: COLORS.muted, textAlign: "center" }}> 
+          {" "}
           <Pressable onPress={() => router.back()}>
             <Text style={{ color: COLORS.text, fontWeight: "800" }}>
               Go back

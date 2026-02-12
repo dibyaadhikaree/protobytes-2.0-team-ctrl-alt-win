@@ -14,16 +14,26 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     validate: [validator.isEmail, "Please provide a valid email"],
   },
-  role: {
-    type: [String],
-    enum: ["admin", "client", "freelancer"],
-    required: true,
-  },
-  activeRole: {
+  publicKey: {
     type: String,
-    enum: ["client", "freelancer"],
-    default: "client",
+    required: true,
+    unique: true,
+    index: true,
   },
+  onlineBalance: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  processedSignatures: {
+    type: [String],
+    default: [],
+    select: false,
+  },
+  // deviceInfo : {
+
+  // }
+
   password: {
     type: String,
     required: [true, "Please provide a password"],

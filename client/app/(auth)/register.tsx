@@ -1,24 +1,38 @@
 import React, { useState } from "react";
 import { View, Text, Alert, ScrollView } from "react-native";
 import { Link, useRouter } from "expo-router";
-import { COLORS } from '../theme/colors';
+import { COLORS } from "../theme/colors";
 import AppInput from "../components/AppInput";
 import AppButton from "../components/AppButton";
+import { registerUser } from "../services/auth";
 
 export default function Register() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const onRegister = async () => {
-    if (!name.trim() || !phone.trim() || password.length < 4) {
-      Alert.alert("Invalid", "Fill all fields (password min 4 chars).");
-      return;
-    }
+    console.log("On register ", name, phone, email, password);
+    try {
+      if (!name.trim() || !email.trim() || password.length < 4) {
+        Alert.alert("Invalid", "Fill all fields (password min 4 chars).");
+        return;
+      }
 
-    Alert.alert("Registered ✅", "Now login with your credentials.");
-    router.replace("/(auth)/login");
+      await registerUser({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        // phoneNumber: phone.trim(), // optional
+      });
+
+      Alert.alert("Registered ✅", "Now login with your credentials.");
+      router.replace("/(auth)/login");
+    } catch (e: any) {
+      Alert.alert("Register failed", e.message || "Something went wrong");
+    }
   };
 
   return (
@@ -71,6 +85,12 @@ export default function Register() {
           keyboardType="phone-pad"
           placeholder="98XXXXXXXX"
         />
+        <AppInput
+          label="Email"
+          value={email}
+          placeholder="Your name"
+          onChangeText={setEmail}
+        />
 
         <AppInput
           label="Password"
@@ -84,7 +104,10 @@ export default function Register() {
 
         <Text style={{ color: COLORS.muted, textAlign: "center" }}>
           Already have an account?{" "}
-          <Link href="/(auth)/login" style={{ color: COLORS.text, fontWeight: "800" }}>
+          <Link
+            href="/(auth)/login"
+            style={{ color: COLORS.text, fontWeight: "800" }}
+          >
             Login
           </Link>
         </Text>

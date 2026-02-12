@@ -5,22 +5,29 @@ import { COLORS } from "../theme/colors";
 import AppInput from "../components/AppInput";
 import AppButton from "../components/AppButton";
 
+import { loginUser } from "../services/auth";
+
 export default function Login() {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const onLogin = async () => {
-    // hackathon MVP: just validate UI
-    if (!phone.trim() || password.length < 4) {
-      Alert.alert("Invalid", "Enter phone and password (min 4 chars).");
-      return;
+    console.log("Login button clicked ");
+    try {
+      if (!email.trim() || password.length < 4) {
+        Alert.alert("Invalid", "Enter email and password (min 4 chars).");
+        return;
+      }
+
+      await loginUser({ email: email.trim(), password });
+      Alert.alert("Logged in ✅", "Token saved on device.");
+
+      router.replace("/"); // or your home route
+    } catch (e: any) {
+      Alert.alert("Login failed", e.message || "Something went wrong");
     }
-
-    Alert.alert("Logged in ✅", "Next step: connect backend auth.");
-    // later: router.replace("/(tabs)/home") or your home route
   };
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: COLORS.bg }}
@@ -59,11 +66,11 @@ export default function Login() {
         </Text>
 
         <AppInput
-          label="Phone Number"
-          value={phone}
-          onChangeText={setPhone}
-          keyboardType="phone-pad"
-          placeholder="98XXXXXXXX"
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          // keyboardType="phone-pad"
+          placeholder="email"
         />
 
         <AppInput
@@ -77,10 +84,14 @@ export default function Login() {
         <AppButton title="Login" onPress={onLogin} />
 
         <Pressable
-          onPress={() => Alert.alert("Forgot Password", "We’ll add this later.")}
+          onPress={() =>
+            Alert.alert("Forgot Password", "We’ll add this later.")
+          }
           style={{ alignSelf: "center", paddingVertical: 6 }}
         >
-          <Text style={{ color: COLORS.muted, textDecorationLine: "underline" }}>
+          <Text
+            style={{ color: COLORS.muted, textDecorationLine: "underline" }}
+          >
             Forgot password?
           </Text>
         </Pressable>
@@ -95,7 +106,10 @@ export default function Login() {
 
         <Text style={{ color: COLORS.muted, textAlign: "center" }}>
           Not a user?{" "}
-          <Link href="/(auth)/register" style={{ color: COLORS.text, fontWeight: "800" }}>
+          <Link
+            href="/(auth)/register"
+            style={{ color: COLORS.text, fontWeight: "800" }}
+          >
             Register
           </Link>
         </Text>
@@ -110,9 +124,7 @@ export default function Login() {
           textAlign: "center",
           lineHeight: 18,
         }}
-      >
-       
-      </Text>
+      ></Text>
     </ScrollView>
   );
 }

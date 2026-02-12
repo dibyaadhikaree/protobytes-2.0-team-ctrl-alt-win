@@ -17,8 +17,11 @@ export default function Register() {
       return;
     }
 
-    Alert.alert("Registered ✅", "Now login with your credentials.");
-    router.replace("/(auth)/login");
+   // Alert.alert("Registered ✅", "Now login with your credentials.");
+   // router.replace("/(auth)/login"); 
+   Alert.alert("OTP Sent ✅", "Enter the OTP to verify (demo).");
+   router.push({ pathname: "/(auth)/otp", params: { phone } });
+
   };
 
   return (

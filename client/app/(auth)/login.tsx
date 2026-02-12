@@ -27,14 +27,6 @@ export default function Login() {
     } catch (e: any) {
       Alert.alert("Login failed", e.message || "Something went wrong");
     }
-<<<<<<< HEAD
-=======
-
-    Alert.alert("Logged in ✅", "Next step: connect backend auth.");
-    // later: router.replace("/(tabs)/home") or your home route
-    router.replace("/(app)/home");
-
->>>>>>> 0b013217521551f1aa5c25312aec44282a37addc
   };
   return (
     <ScrollView

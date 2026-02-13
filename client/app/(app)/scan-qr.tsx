@@ -20,6 +20,8 @@ export default function QRScannerScreen() {
   const [scanned, setScanned] = useState(false);
   const router = useRouter();
 
+  console.log('QRScannerScreen component rendering...');
+
   useEffect(() => {
     console.log('QR Scanner component mounted');
     if (!permission) {

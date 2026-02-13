@@ -258,7 +258,9 @@ export default function Home() {
         onPress={() => {
           console.log('Receive button pressed - navigating to QR scanner');
           try {
-            router.push("/scan-qr");
+            console.log('About to call router.push("/(app)/scan-qr")');
+            router.push("/(app)/scan-qr");
+            console.log('Navigation command sent');
           } catch (error) {
             console.log('Navigation error from Receive button:', error);
             Alert.alert("Error", "Could not open QR scanner");

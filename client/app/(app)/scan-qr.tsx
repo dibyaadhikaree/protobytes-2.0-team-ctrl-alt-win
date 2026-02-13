@@ -22,18 +22,134 @@ export default function QRScannerScreen() {
 
   console.log('QRScannerScreen component rendering...');
 
-  // Add a simple test view to see if component loads
+  useEffect(() => {
+    console.log('QR Scanner component mounted');
+    if (!permission) {
+      console.log('Requesting camera permission...');
+      requestPermission();
+    } else {
+      console.log('Camera permission status:', permission.granted);
+      if (!permission.granted) {
+        console.log('Camera permission not granted, requesting...');
+        requestPermission();
+      }
+    }
+  }, [permission, requestPermission]);
+
+  if (!permission) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.message}>Requesting camera permission...</Text>
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.message}>We need your permission to show the camera</Text>
+        <TouchableOpacity style={styles.button} onPress={requestPermission}>
+          <Text style={styles.buttonText}>Grant permission</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+    if (scanned) return;
+    
+    setScanned(true);
+    
+    // Vibrate to indicate successful scan
+    try {
+      // You can add haptic feedback here if needed
+    } catch (error) {
+      console.log('Haptic feedback not available');
+    }
+
+    // Handle the scanned QR code data
+    Alert.alert(
+      'QR Code Scanned',
+      `Data: ${data}`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => setScanned(false),
+        },
+        {
+          text: 'Process',
+          onPress: () => {
+            // Process the QR code data here
+            console.log('Processing QR data:', data);
+            // Navigate to payment or processing screen
+            // router.push('/payment-process');
+            setScanned(false);
+          },
+        },
+      ]
+    );
+  };
+
+  const goBack = () => {
+    console.log('Back button pressed');
+    try {
+      console.log('Attempting to navigate to home...');
+      router.push('/(app)/home');
+    } catch (error) {
+      console.log('Navigation error:', error);
+      router.back();
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={{color: 'white', fontSize: 20, textAlign: 'center', marginTop: 100}}>
-        QR Scanner Loaded Successfully!
-      </Text>
-      <TouchableOpacity 
-        style={{backgroundColor: 'blue', padding: 20, margin: 20, borderRadius: 10}}
-        onPress={() => router.back()}
-      >
-        <Text style={{color: 'white', textAlign: 'center'}}>Go Back</Text>
-      </TouchableOpacity>
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={goBack}>
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>QR Scanner</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      {/* Camera View */}
+      <CameraView
+        style={styles.camera}
+        barcodeScannerSettings={{
+          barcodeTypes: ['qr'],
+        }}
+        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+      />
+
+      {/* Overlay */}
+      <View style={styles.overlay}>
+        {/* Instruction Text */}
+        <Text style={styles.instructionText}>scan QR code to pay</Text>
+
+        {/* Scanning Frame */}
+        <View style={styles.scanFrameContainer}>
+          <View style={styles.scanFrame}>
+            {/* Corner brackets */}
+            <View style={[styles.corner, styles.topLeft]} />
+            <View style={[styles.corner, styles.topRight]} />
+            <View style={[styles.corner, styles.bottomLeft]} />
+            <View style={[styles.corner, styles.bottomRight]} />
+          </View>
+        </View>
+
+        {/* Reset button if scanned */}
+        {scanned && (
+          <TouchableOpacity
+            style={styles.resetButton}
+            onPress={() => setScanned(false)}
+          >
+            <Text style={styles.resetButtonText}>Scan Again</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }

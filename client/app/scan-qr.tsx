@@ -26,9 +26,13 @@ export default function QRScannerScreen() {
       console.log('Requesting camera permission...');
       requestPermission();
     } else {
-      console.log('Camera permission already granted:', permission.granted);
+      console.log('Camera permission status:', permission.granted);
+      if (!permission.granted) {
+        console.log('Camera permission not granted, requesting...');
+        requestPermission();
+      }
     }
-  }, [permission]);
+  }, [permission, requestPermission]);
 
   if (!permission) {
     return (

@@ -1,5 +1,6 @@
 import { apiFetch } from "./api";
 import { setToken, clearToken } from "./storage";
+import { clearCachedWallet } from "./walletCache";
 
 export async function registerUser(payload: any) {
   const res = await apiFetch("/auth/register", {
@@ -23,4 +24,5 @@ export async function loginUser(payload: any) {
 
 export async function logoutUser() {
   await clearToken();
+  await clearCachedWallet();
 }

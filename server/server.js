@@ -20,10 +20,9 @@ mongoose
   .then(() => console.log("Sucessfully connected to ChitoPay database"))
   .catch((error) => console.log("Error connecting to database", error));
 
-app.listen(port, "127.0.0.1", () => {
-  console.log(`Server has started on Port : ${port}`);
+app.listen(3000, "0.0.0.0", () => {
+  console.log("Server running on port 3000");
 });
-
 process.on("unhandledRejection", (err) => {
   console.log("UNHANDLED REJECTION! 💥 Shutting down...");
   console.log(err.name, err.message);

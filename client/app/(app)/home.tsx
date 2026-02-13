@@ -1,20 +1,28 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { COLORS } from "../theme/colors";
 import { logoutUser } from "../services/auth";
+import { isOnline } from "../services/network";
+import { getCachedWallet } from "../services/walletCache";
+import { getPendingTxs } from "../offline/queue";
 
 function BigActionCard({
   title,
   icon,
   onPress,
+  disabled,
+  subtitle,
 }: {
   title: string;
   icon: string;
   onPress: () => void;
+  disabled?: boolean;
+  subtitle?: string;
 }) {
   return (
     <Pressable
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => ({
         backgroundColor: COLORS.card,
@@ -25,14 +33,20 @@ function BigActionCard({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        opacity: pressed ? 0.85 : 1,
+        opacity: disabled ? 0.45 : pressed ? 0.85 : 1,
       })}
     >
-      <Text style={{ color: COLORS.text, fontSize: 22, fontWeight: "900" }}>
-        {title}
-      </Text>
+      <View style={{ flex: 1, paddingRight: 12 }}>
+        <Text style={{ color: COLORS.text, fontSize: 22, fontWeight: "900" }}>
+          {title}
+        </Text>
+        {!!subtitle && (
+          <Text style={{ color: COLORS.muted, marginTop: 6, fontSize: 12 }}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
 
-      {/* simple icon placeholder */}
       <View
         style={{
           width: 48,
@@ -54,33 +68,98 @@ function BigActionCard({
 export default function Home() {
   const router = useRouter();
 
-  // demo data (replace from storage later)
-  const userName = "Nischal";
-  const balance = 12345.5;
-  const points = 820;
+  const [online, setOnline] = useState<boolean>(true);
+  const [loadingLocal, setLoadingLocal] = useState(true);
+
+  const [userName, setUserName] = useState<string>("User");
+  const [balance, setBalance] = useState<number | null>(null);
+  const [points, setPoints] = useState<number>(0); // optional
+  const [pendingCount, setPendingCount] = useState<number>(0);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+
+  const loadLocalState = async () => {
+    setLoadingLocal(true);
+    try {
+      const net = await isOnline();
+      setOnline(net);
+
+      // wallet cache
+      const cached = await getCachedWallet();
+      if (cached) {
+        setUserName(cached?.name || cached?.userName || "User");
+        // your backend uses onlineBalance currently
+        const b = Number(cached?.onlineBalance ?? cached?.balance);
+        setBalance(Number.isFinite(b) ? b : 0);
+        setPoints(Number(cached?.points ?? 0));
+        setLastSyncAt(cached?.lastSyncAt ?? null);
+      } else {
+        // no cached wallet yet (user must go online once)
+        setBalance(null);
+      }
+
+      // pending queue count
+      const pending = await getPendingTxs();
+      setPendingCount(Array.isArray(pending) ? pending.length : 0);
+    } finally {
+      setLoadingLocal(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLocalState();
+  }, []);
 
   const onLogout = async () => {
-    // Alert.alert("Logout", "Are you sure you want to logout?", [
-    //   { text: "Cancel", style: "cancel" },
-    //   {
-    //     text: "Logout",
-    //     style: "destructive",
-    //     onPress: async () => {
-    //       await logoutUser();
-    //       router.replace("/(auth)/login");
-    //     },
-    //   },
-    // ]);
-
-    await logoutUser();
-    router.replace("/(auth)/login");
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          await logoutUser();
+          router.replace("/(auth)/login");
+        },
+      },
+    ]);
   };
+
+  const balanceText =
+    balance === null ? "—" : `NPR ${balance.toLocaleString()}`;
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: COLORS.bg }}
       contentContainerStyle={{ padding: 16, paddingTop: 22, gap: 14 }}
     >
+      {/* Status banner */}
+      <Pressable
+        onPress={loadLocalState}
+        style={{
+          backgroundColor: online
+            ? "rgba(59, 130, 246, 0.12)"
+            : "rgba(245, 158, 11, 0.12)",
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: online
+            ? "rgba(59, 130, 246, 0.25)"
+            : "rgba(245, 158, 11, 0.25)",
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+        }}
+      >
+        <Text style={{ color: COLORS.text, fontWeight: "900" }}>
+          {online ? "ONLINE" : "OFFLINE"}{" "}
+          <Text style={{ color: COLORS.muted, fontWeight: "700" }}>
+            • Tap to refresh
+          </Text>
+        </Text>
+
+        <Text style={{ color: COLORS.muted, marginTop: 4, fontSize: 12 }}>
+          Pending transfers: {pendingCount}
+          {lastSyncAt ? ` • Last sync: ${lastSyncAt}` : ""}
+        </Text>
+      </Pressable>
+
       {/* Top header */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <View
@@ -124,7 +203,7 @@ export default function Home() {
         </Pressable>
       </View>
 
-      {/* Balance + Points bar (like your sketch) */}
+      {/* Balance + Points */}
       <View
         style={{
           backgroundColor: COLORS.card,
@@ -138,16 +217,17 @@ export default function Home() {
         <View style={{ flex: 1, padding: 16 }}>
           <Text style={{ color: COLORS.muted, fontSize: 12 }}>Balance</Text>
           <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900" }}>
-            NPR {balance.toLocaleString()}
+            {balanceText}
           </Text>
+
+          {balance === null && (
+            <Text style={{ color: COLORS.muted, marginTop: 6, fontSize: 12 }}>
+              Go online once to sync your wallet.
+            </Text>
+          )}
         </View>
 
-        <View
-          style={{
-            width: 1,
-            backgroundColor: "rgba(148,180,193,0.25)",
-          }}
-        />
+        <View style={{ width: 1, backgroundColor: "rgba(148,180,193,0.25)" }} />
 
         <View style={{ flex: 1, padding: 16 }}>
           <Text style={{ color: COLORS.muted, fontSize: 12 }}>ChitoPoints</Text>
@@ -157,31 +237,29 @@ export default function Home() {
         </View>
       </View>
 
-      {/* Actions */}
+      {/* Actions (offline allowed) */}
       <BigActionCard
         title="Send"
         icon="📤"
-        onPress={() => {
-          // later route: /(app)/send
-          // for now: just show placeholder
-          router.push("/(app)/home"); // replace later
-        }}
+        subtitle="Works offline • creates a pending transfer"
+        onPress={() => router.push("/(app)/send")}
       />
 
       <BigActionCard
         title="Receive"
         icon="📥"
-        onPress={() => {
-          // later route: /(app)/receive
-          router.push("/(app)/home"); // replace later
-        }}
+        subtitle="Works offline • shows My QR"
+        onPress={() => Alert.alert("Receive", "Next: implement My QR screen")}
       />
 
-      {/* Load from bank */}
+      {/* Online-only action */}
       <Pressable
         onPress={() => {
-          // later: /(app)/load-bank
-          router.push("/(app)/home"); // replace later
+          if (!online) {
+            Alert.alert("Offline", "Internet required to load from bank.");
+            return;
+          }
+          Alert.alert("Load from Bank", "Next: implement bank top-up flow");
         }}
         style={({ pressed }) => ({
           marginTop: 6,
@@ -198,11 +276,10 @@ export default function Home() {
           Load from Bank
         </Text>
         <Text style={{ color: COLORS.muted, marginTop: 6, fontSize: 12 }}>
-          (For demo: adds balance later)
+          {online ? "(Online only)" : "(Offline — disabled)"}
         </Text>
       </Pressable>
 
-      {/* tiny hint */}
       <Text
         style={{
           color: "rgba(234,224,207,0.55)",
@@ -211,7 +288,7 @@ export default function Home() {
           marginTop: 8,
         }}
       >
-        Offline-first UI • actions will work without internet
+        Offline-first UI • balance from cache • transfers queued when offline
       </Text>
     </ScrollView>
   );

@@ -9,14 +9,14 @@ const createToken = (userId) => {
 };
 
 const register = catchAsync(async (req, res, next) => {
-  const { name, email, password, passwordConfirm, role } = req.body;
+  const { name, email, password, passwordConfirm, phoneNumber } = req.body;
 
   const freshUser = await User.create({
     name,
     email,
     password,
     passwordConfirm,
-    role,
+    phoneNumber,
   });
 
   freshUser.password = undefined;
@@ -53,6 +53,7 @@ const protect = catchAsync(async (req, res, next) => {
 
   let token;
 
+  console.log(req.headers.authorization);
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith("Bearer")
@@ -94,4 +95,15 @@ const restrictTo =
     next();
   };
 
-module.exports = { register, login, protect, restrictTo };
+const getMe = catchAsync(async (req, res, next) => {
+  // req.user comes from protect middleware
+  const user = req.user;
+  if (user.password) delete user.password;
+
+  res.status(200).json({
+    status: "success",
+    user,
+  });
+});
+
+module.exports = { register, login, protect, restrictTo, getMe };

@@ -14,12 +14,12 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     validate: [validator.isEmail, "Please provide a valid email"],
   },
-  publicKey: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true,
-  },
+  // publicKey: {
+  //   type: String,
+  //   // required: true,
+  //   unique: true,
+  //   index: true,
+  // },
   onlineBalance: {
     type: Number,
     default: 0,

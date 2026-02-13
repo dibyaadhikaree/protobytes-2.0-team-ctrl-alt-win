@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { COLORS } from "../theme/colors";
@@ -14,6 +14,10 @@ function formatMoney(n: number) {
 export default function SendMoney() {
   const router = useRouter();
 
+  useEffect(() => {
+    console.log("Send page loaded successfully");
+  }, []);
+
   // demo data (later load from storage)
   const balance = 12345.5;
 
@@ -25,6 +29,13 @@ export default function SendMoney() {
 
   const [hideBalance, setHideBalance] = useState(false);
   const [amountStr, setAmountStr] = useState(""); // store as string to control keypad
+
+  const amountNum = useMemo(() => {
+    const n = Number(amountStr);
+    if (amountStr === '') return 0;
+    if (Number.isNaN(n)) return 0;
+    return n;
+  }, [amountStr]);
 
   const displayBalance = useMemo(() => {
     if (hideBalance) return "NPR ••••.••";
@@ -38,7 +49,7 @@ export default function SendMoney() {
 
   const onPressDigit = (d: string) => {
     // prevent leading zeros like "000"
-    if (amountStr === "0") {
+    if (amountStr === '') {
       setAmountStr(d);
       return;
     }
@@ -62,14 +73,9 @@ export default function SendMoney() {
     setAmountStr((prev) => prev.slice(0, -1));
   };
 
-  const amountNum = useMemo(() => {
-    const n = Number(amountStr);
-    if (!amountStr) return 0;
-    if (Number.isNaN(n)) return 0;
-    return n;
-  }, [amountStr]);
-
   const onContinue = () => {
+    console.log("Continue button clicked, amount:", amountNum);
+    
     if (amountNum <= 0) {
       Alert.alert("Invalid amount", "Enter amount to send.");
       return;
@@ -79,8 +85,9 @@ export default function SendMoney() {
       return;
     }
 
-    // next page later: choose recipient / scan QR / confirm
-    Alert.alert("Continue ✅", `Amount: NPR ${formatMoney(amountNum)}`);
+    console.log("Navigating to QR page...");
+    // Navigate to separate QR page with amount
+    router.push(`/(app)/my-qr?amount=${amountNum.toString()}`);
   };
 
   return (
@@ -92,7 +99,13 @@ export default function SendMoney() {
       {/* Header row */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(app)/home');
+            }
+          }}
           style={({ pressed }) => ({
             width: 44,
             height: 44,
@@ -190,7 +203,7 @@ export default function SendMoney() {
         </View>
 
         <Text style={{ color: "rgba(234,224,207,0.55)", fontSize: 12, marginTop: 2 }}>
-          
+          ()
         </Text>
       </View>
 
@@ -214,7 +227,9 @@ export default function SendMoney() {
           </Text>
         </View>
 
-        
+        <Text style={{ color: COLORS.muted, fontSize: 12 }}>
+          Enter using keypad below
+        </Text>
       </View>
 
       {/* Keypad */}

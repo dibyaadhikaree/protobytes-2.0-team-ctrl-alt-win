@@ -68,38 +68,39 @@ function BigActionCard({
 export default function Home() {
   const router = useRouter();
 
-  const [online, setOnline] = useState<boolean>(true);
+  const [online, setOnline] = useState(false);
+  const [wallet, setWallet] = useState<any>(null);
+  const [points, setPoints] = useState(0);
   const [loadingLocal, setLoadingLocal] = useState(true);
-
-  const [userName, setUserName] = useState<string>("User");
-  const [balance, setBalance] = useState<number | null>(null);
-  const [points, setPoints] = useState<number>(0); // optional
-  const [pendingCount, setPendingCount] = useState<number>(0);
+  const [pendingCount, setPendingCount] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>("User");
+
+  console.log("HomePage component rendered");
 
   const loadLocalState = async () => {
-    setLoadingLocal(true);
     try {
-      const net = await isOnline();
-      setOnline(net);
+      const isOnlineStatus = await isOnline();
+      setOnline(isOnlineStatus);
+      console.log("Network status:", isOnlineStatus);
 
-      // wallet cache
       const cached = await getCachedWallet();
-      if (cached) {
-        setUserName(cached?.name || cached?.userName || "User");
-        // your backend uses onlineBalance currently
-        const b = Number(cached?.onlineBalance ?? cached?.balance);
-        setBalance(Number.isFinite(b) ? b : 0);
-        setPoints(Number(cached?.points ?? 0));
-        setLastSyncAt(cached?.lastSyncAt ?? null);
-      } else {
-        // no cached wallet yet (user must go online once)
-        setBalance(null);
+      setWallet(cached);
+      if (cached?.balance) {
+        setPoints(cached.balance);
       }
+      if (cached?.name) {
+        setUserName(cached.name);
+      }
+      setLastSyncAt(new Date().toLocaleTimeString());
+      console.log("Wallet loaded:", cached);
 
       // pending queue count
       const pending = await getPendingTxs();
       setPendingCount(Array.isArray(pending) ? pending.length : 0);
+    } catch (error) {
+      console.error("Home init error:", error);
+      setPoints(0);
     } finally {
       setLoadingLocal(false);
     }
@@ -110,21 +111,20 @@ export default function Home() {
   }, []);
 
   const onLogout = async () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          await logoutUser();
-          router.replace("/(auth)/login");
-        },
-      },
-    ]);
+    // Alert.alert("Logout", "Are you sure you want to logout?", [
+    //   { text: "Cancel", style: "cancel" },
+    //   {
+    //     text: "Logout",
+    //     style: "destructive",
+    //     onPress: async () => {},
+    //   },
+    // ]);
+    await logoutUser();
+    router.replace("/(auth)/login");
   };
 
   const balanceText =
-    balance === null ? "—" : `NPR ${balance.toLocaleString()}`;
+    points === null ? "—" : `NPR ${points.toLocaleString()}`;
 
   return (
     <ScrollView
@@ -220,7 +220,7 @@ export default function Home() {
             {balanceText}
           </Text>
 
-          {balance === null && (
+          {points === null && (
             <Text style={{ color: COLORS.muted, marginTop: 6, fontSize: 12 }}>
               Go online once to sync your wallet.
             </Text>
@@ -242,7 +242,13 @@ export default function Home() {
         title="Send"
         icon="📤"
         subtitle="Works offline • creates a pending transfer"
-        onPress={() => router.push("/(app)/send")}
+        onPress={() => {
+          console.log("=== SEND BUTTON CLICKED ===");
+          console.log("Current URL:", window.location.href);
+          console.log("Attempting navigation to /send");
+          router.replace("/(app)/send");
+          console.log("Navigation command sent");
+        }}
       />
 
       <BigActionCard

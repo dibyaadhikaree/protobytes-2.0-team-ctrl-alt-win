@@ -92,7 +92,7 @@ export default function MyQR() {
         borderRadius: 18,
         alignItems: "center" 
       }}>
-        <Text style={{ color: COLORS.muted, fontSize: 12 }}>Amount to Receive</Text>
+        <Text style={{ color: COLORS.muted, fontSize: 12 }}>Amount to Pay</Text>
         <Text style={{ color: COLORS.text, fontSize: 24, fontWeight: "900" }}>
           NPR {formatMoney(amountNum)}
         </Text>

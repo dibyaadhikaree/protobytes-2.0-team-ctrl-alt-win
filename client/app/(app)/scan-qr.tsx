@@ -18,6 +18,7 @@ const SCAN_FRAME_SIZE = width * 0.7;
 export default function QRScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [cameraActive, setCameraActive] = useState(true);
   const router = useRouter();
 
   console.log('QRScannerScreen component rendering...');
@@ -35,6 +36,14 @@ export default function QRScannerScreen() {
       }
     }
   }, [permission, requestPermission]);
+
+  useEffect(() => {
+    return () => {
+      console.log('QR Scanner component unmounting - cleaning up camera');
+      setScanned(false); // Reset scan state
+      setCameraActive(false); // Deactivate camera
+    };
+  }, []);
 
   if (!permission) {
     return (
@@ -95,6 +104,9 @@ export default function QRScannerScreen() {
     console.log('Back button pressed');
     try {
       console.log('Attempting to navigate to home...');
+      // Stop camera and cleanup before navigation
+      setScanned(false); // Reset scan state
+      setCameraActive(false); // Deactivate camera
       router.push('/(app)/home');
     } catch (error) {
       console.log('Navigation error:', error);
@@ -116,13 +128,15 @@ export default function QRScannerScreen() {
       </View>
 
       {/* Camera View */}
-      <CameraView
-        style={styles.camera}
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr'],
-        }}
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-      />
+      {cameraActive && (
+        <CameraView
+          style={styles.camera}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr'],
+          }}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        />
+      )}
 
       {/* Overlay */}
       <View style={styles.overlay}>

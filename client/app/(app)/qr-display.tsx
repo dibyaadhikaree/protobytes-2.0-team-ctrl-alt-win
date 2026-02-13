@@ -2,7 +2,8 @@ import React, { useMemo } from "react";
 import { View, Text, ScrollView, Pressable, Alert, Share } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { COLORS } from "../theme/colors";
-import { generatePaymentQRData, QRCodeComponent } from "../services/qr";
+import { generatePaymentQRData } from "../services/qr";
+import QRCode from 'react-native-qrcode-svg';
 import AppButton from "../components/AppButton";
 
 function formatMoney(n: number) {
@@ -113,7 +114,7 @@ export default function QRDisplay() {
             borderColor: COLORS.border,
           }}
         >
-          <QRCodeComponent value={qrData} size={200} />
+          <QRCode value={qrData} size={200} color="black" backgroundColor="white" />
         </View>
 
         <Text style={{ color: COLORS.muted, fontSize: 12, textAlign: "center" }}>

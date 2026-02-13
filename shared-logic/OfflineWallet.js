@@ -17,6 +17,8 @@ class OfflineWallet {
   constructor(userKeys, chain = []) {
     this.keys = userKeys;
     this.chain = chain;
+    this.pendingTransactions = []; // Track incomplete transactions
+    this.errorLog = []; // Log failures for recovery
   }
 
   // --- 2. GET BALANCE ---
@@ -111,7 +113,14 @@ class OfflineWallet {
       const cleanBlock = [...block]; 
       cleanBlock[BLOCK_IDX.SIGNATURE] = ""; 
       
-      const isValidSig = CryptoHelper.verify(cleanBlock, block[BLOCK_IDX.SIGNATURE], block[BLOCK_IDX.FROM]);
+      // Skip signature verification for genesis blocks from SYSTEM
+      const isGenesisBlock = block[BLOCK_IDX.FROM] === SYSTEM_CONFIG.GENESIS_SENDER_ID;
+      let isValidSig = true;
+      
+      if (!isGenesisBlock) {
+        isValidSig = CryptoHelper.verify(cleanBlock, block[BLOCK_IDX.SIGNATURE], block[BLOCK_IDX.FROM]);
+      }
+      
       if (!isValidSig) {
         throw new Error(`Security Alert: Invalid Signature at Block #${i + 1}`);
       }
@@ -130,7 +139,178 @@ class OfflineWallet {
     return incomingChain;
   }
 
-  // --- 5. RESET WALLET (AFTER SYNC) ---
+  // --- 5. NETWORK SYNC LOGIC ---
+  // Uploads chain to server for validation and updates balance
+  async syncWithServer(apiEndpoint = '/api/offline/sync') {
+    const backup = [...this.chain]; // Backup before sync
+    
+    try {
+      const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userPublicKey: this.keys.publicKey,
+          chain: this.chain,
+          timestamp: Date.now()
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        this.resetChain();
+        return {
+          newBalance: result.newBalance,
+          syncedTransactions: result.syncedCount,
+          serverTimestamp: result.timestamp
+        };
+      } else {
+        throw new Error(result.error || 'Sync failed');
+      }
+    } catch (error) {
+      // Restore backup if sync fails
+      this.chain = backup;
+      this.logError('syncWithServer', error, [apiEndpoint]);
+      throw new Error(`Sync failed: ${error.message}`);
+    }
+  }
+
+  // --- 6. ERROR HANDLING & LOGGING ---
+  // Enhanced error handling wrapper
+  safeOperation(operation, ...args) {
+    try {
+      return operation.apply(this, args);
+    } catch (error) {
+      this.logError(operation.name, error, args);
+      throw error;
+    }
+  }
+
+  // Log errors for recovery and debugging
+  logError(operation, error, args) {
+    this.errorLog.push({
+      timestamp: Date.now(),
+      operation,
+      error: error.message,
+      args,
+      chainSnapshot: [...this.chain],
+      id: Math.random().toString(36).substr(2, 9)
+    });
+    
+    // Keep only last 50 errors to prevent memory issues
+    if (this.errorLog.length > 50) {
+      this.errorLog = this.errorLog.slice(-50);
+    }
+  }
+
+  // Get recent errors for debugging
+  getRecentErrors(limit = 10) {
+    return this.errorLog.slice(-limit);
+  }
+
+  // Clear error log
+  clearErrorLog() {
+    this.errorLog = [];
+    return true;
+  }
+
+  // --- 7. RECOVERY MECHANISMS ---
+  // Recover pending/incomplete transactions
+  recoverPendingTransactions() {
+    const incomplete = this.errorLog.filter(log => 
+      log.operation === 'generateBlock' && 
+      log.args && log.args.length >= 2
+    );
+    
+    return incomplete.map(log => ({
+      receiver: log.args[0],
+      amount: log.args[1],
+      timestamp: log.timestamp,
+      errorId: log.id,
+      recoverable: this.canRecover(log)
+    }));
+  }
+
+  // Check if a transaction can be recovered
+  canRecover(errorLog) {
+    const currentBalance = this.getBalance();
+    return errorLog.args && errorLog.args[1] <= currentBalance;
+  }
+
+  // Validate and repair chain integrity
+  validateAndRepairChain() {
+    const issues = [];
+    const validBlocks = [];
+    
+    for (let i = 0; i < this.chain.length; i++) {
+      try {
+        const block = this.chain[i];
+        const prevBlock = i > 0 ? validBlocks[i-1] : null;
+        
+        // Re-validate signature
+        const cleanBlock = [...block];
+        cleanBlock[BLOCK_IDX.SIGNATURE] = "";
+        
+        // Skip signature verification for genesis blocks from SYSTEM
+        const isGenesisBlock = block[BLOCK_IDX.FROM] === SYSTEM_CONFIG.GENESIS_SENDER_ID;
+        let isValidSig = true;
+        
+        if (!isGenesisBlock) {
+          isValidSig = CryptoHelper.verify(
+            cleanBlock, 
+            block[BLOCK_IDX.SIGNATURE], 
+            block[BLOCK_IDX.FROM]
+          );
+        }
+        
+        if (!isValidSig) {
+          issues.push({ index: i, type: 'INVALID_SIGNATURE', block });
+          continue;
+        }
+        
+        // Verify hash link
+        if (prevBlock) {
+          const calculatedPrevHash = CryptoHelper.hash(prevBlock);
+          if (block[BLOCK_IDX.PREV_HASH] !== calculatedPrevHash) {
+            issues.push({ index: i, type: 'BROKEN_CHAIN_LINK', block });
+            continue;
+          }
+        }
+        
+        validBlocks.push(block);
+      } catch (error) {
+        issues.push({ index: i, type: 'CORRUPTED_BLOCK', error, block: this.chain[i] });
+      }
+    }
+    
+    // Update chain with only valid blocks
+    if (issues.length > 0) {
+      this.chain = validBlocks;
+      this.logError('validateAndRepairChain', new Error(`Found ${issues.length} issues`), issues);
+    }
+    
+    return { issues, validChain: validBlocks };
+  }
+
+  // Retry sync with enhanced error handling
+  async retrySync(apiEndpoint) {
+    // First validate chain
+    const { issues } = this.validateAndRepairChain();
+    
+    if (issues.length > 0) {
+      console.warn(`Chain repaired before sync. Found ${issues.length} issues.`);
+    }
+    
+    return await this.syncWithServer(apiEndpoint);
+  }
+
+  // --- 8. RESET WALLET (AFTER SYNC) ---
   // Call this ONLY after the server returns "200 OK"
   resetChain() {
     // We keep the keys, but wipe the transaction history

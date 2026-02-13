@@ -14,17 +14,23 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     validate: [validator.isEmail, "Please provide a valid email"],
   },
+  balance: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 1000,
+  },
+  maxBalance: {
+    type: Number,
+    default: 1000,
+  },
+
   // publicKey: {
   //   type: String,
   //   // required: true,
   //   unique: true,
   //   index: true,
   // },
-  onlineBalance: {
-    type: Number,
-    default: 0,
-    min: 0,
-  },
   processedSignatures: {
     type: [String],
     default: [],

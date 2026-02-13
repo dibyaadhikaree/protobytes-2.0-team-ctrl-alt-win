@@ -15,15 +15,13 @@ app.use(express.static(path.join(__dirname, "public")));
 
 //Setting Up the Routers
 const indexRouter = require("./routes/indexRoute");
-// const jobRouter = require("./routes/jobRoutes");
 const authRouter = require("./routes/authRoute");
-// const proposalRouter = require("./routes/proposalRoutes");
+const walletRouter = require("./routes/walletRoute");
 const errorController = require("./controllers/errorController");
 
 app.use("/", indexRouter);
 app.use("/auth", authRouter);
-// app.use("/jobs", jobRouter);
-// app.use("/proposals", proposalRouter);
+app.use("/wallet", walletRouter);
 
 //for catching all the errors
 app.all("*", (req, res, next) => {

@@ -7,6 +7,7 @@
 const Constants = require('./constants');
 const { CryptoHelper } = require('./CryptoHelper');
 const { OfflineWallet } = require('./OfflineWallet');
+const { QRHandshake } = require('./QRHandshake');
 
 module.exports = {
   // Constants
@@ -15,5 +16,6 @@ module.exports = {
 
   // Classes & Helpers
   CryptoHelper,
+  QRHandshake,
   OfflineWallet
 };

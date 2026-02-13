@@ -249,7 +249,15 @@ export default function Home() {
         title="Receive"
         icon="📥"
         subtitle="Works offline • shows My QR"
-        onPress={() => Alert.alert("Receive", "Next: implement My QR screen")}
+        onPress={() => {
+          console.log('Receive button pressed - navigating to QR scanner');
+          try {
+            router.push("/scan-qr");
+          } catch (error) {
+            console.log('Navigation error from Receive button:', error);
+            Alert.alert("Error", "Could not open QR scanner");
+          }
+        }}
       />
 
       {/* Online-only action */}

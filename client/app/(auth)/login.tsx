@@ -22,8 +22,7 @@ export default function Login() {
 
       await loginUser({ email: email.trim(), password });
       Alert.alert("Logged in ✅", "Token saved on device.");
-
-      router.replace("/"); // or your home route
+      router.replace("/(app)/home");
     } catch (e: any) {
       Alert.alert("Login failed", e.message || "Something went wrong");
     }
@@ -46,7 +45,7 @@ export default function Login() {
       </Text>
 
       <Text style={{ color: COLORS.muted, marginTop: 8, lineHeight: 20 }}>
-        Nepal's first offline payment method . Login to continue.
+        Nepal&apos;s first offline payment method . Login to continue.
       </Text>
 
       {/* Card */}

@@ -1,34 +1,26 @@
-import * as SecureStore from "expo-secure-store";
 import { apiFetch } from "./api";
+import { setToken, clearToken } from "./storage";
 
-export async function registerUser(payload: {
-  name: string;
-  email: string;
-  password: string;
-  phoneNumber?: string;
-}) {
-  const data = await apiFetch("/auth/register", {
+export async function registerUser(payload: any) {
+  const res = await apiFetch("/auth/register", {
     method: "POST",
-    body: JSON.stringify({
-      ...payload,
-      passwordConfirm: payload.password, // if backend requires it
-    }),
+    body: JSON.stringify({ ...payload, passwordConfirm: payload.password }),
   });
 
-  if (data.token) await SecureStore.setItemAsync("token", data.token);
-  return data;
+  if (res?.token) await setToken(res.token);
+  return res.data;
 }
 
-export async function loginUser(payload: { email: string; password: string }) {
-  const data = await apiFetch("/auth/login", {
+export async function loginUser(payload: any) {
+  const res = await apiFetch("/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 
-  if (data.token) await SecureStore.setItemAsync("token", data.token);
-  return data;
+  if (res?.token) await setToken(res.token);
+  return res.data;
 }
 
 export async function logoutUser() {
-  await SecureStore.deleteItemAsync("token");
+  await clearToken();
 }

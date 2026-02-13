@@ -1,7 +1,8 @@
 import React from "react";
-import { View, Text, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { COLORS } from "../theme/colors";
+import { logoutUser } from "../services/auth";
 
 function BigActionCard({
   title,
@@ -58,6 +59,23 @@ export default function Home() {
   const balance = 12345.5;
   const points = 820;
 
+  const onLogout = async () => {
+    // Alert.alert("Logout", "Are you sure you want to logout?", [
+    //   { text: "Cancel", style: "cancel" },
+    //   {
+    //     text: "Logout",
+    //     style: "destructive",
+    //     onPress: async () => {
+    //       await logoutUser();
+    //       router.replace("/(auth)/login");
+    //     },
+    //   },
+    // ]);
+
+    await logoutUser();
+    router.replace("/(auth)/login");
+  };
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: COLORS.bg }}
@@ -92,7 +110,7 @@ export default function Home() {
         </View>
 
         <Pressable
-          onPress={() => router.replace("/(auth)/login")}
+          onPress={onLogout}
           style={({ pressed }) => ({
             paddingVertical: 10,
             paddingHorizontal: 12,

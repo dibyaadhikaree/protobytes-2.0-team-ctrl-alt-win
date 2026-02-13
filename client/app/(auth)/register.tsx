@@ -14,10 +14,10 @@ export default function Register() {
   const [password, setPassword] = useState("");
 
   const onRegister = async () => {
-    console.log("On register ", name, phone, email, password);
     try {
       if (!name.trim() || !email.trim() || password.length < 4) {
         Alert.alert("Invalid", "Fill all fields (password min 4 chars).");
+        console.log("On register if st");
         return;
       }
 
@@ -25,11 +25,13 @@ export default function Register() {
         name: name.trim(),
         email: email.trim(),
         password,
-        // phoneNumber: phone.trim(), // optional
+        phoneNumber: phone.trim(), // send it since backend returns phoneNumber anyway
       });
 
-      Alert.alert("Registered ✅", "Now login with your credentials.");
-      router.replace("/(auth)/login");
+      Alert.alert("Registered ✅", "Account created and logged in.", [
+        { text: "OK", onPress: () => router.replace("/(app)/home") },
+      ]);
+      router.replace("/(app)/home");
     } catch (e: any) {
       Alert.alert("Register failed", e.message || "Something went wrong");
     }

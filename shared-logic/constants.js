@@ -5,7 +5,7 @@
 
 // 1. Define the System Configuration Rules
 const SYSTEM_CONFIG = {
-  MAX_HOPS: 10,                 // Limit the offline chain to 10 transfers to keep QR scanning fast.
+  MAX_HOPS: 11,                 // Limit the offline chain to 10 transfers to keep QR scanning fast.
   COMMISSION_FEE: 5,            // The fee (in Rs) deducted when loading money from Bank to Offline.
   OFFLINE_LIMIT: 1000,          // The maximum balance (in Rs) a user is allowed to hold offline.
   GENESIS_SENDER_ID: "SYSTEM",  // The unique ID used to identify money loaded from the Server.

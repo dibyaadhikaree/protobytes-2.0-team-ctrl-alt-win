@@ -21,14 +21,25 @@ export default function RootLayout() {
         setChecking(true);
 
         const group = segments?.[0];
+        console.log("Layout check - segments:", segments, "group:", group);
         if (!group) return;
 
         const token = await getToken();
         const inAuth = group === "(auth)";
         const inApp = group === "(app)";
+        
+        console.log("Layout check - token:", !!token, "inAuth:", inAuth, "inApp:", inApp);
+
+        // TEMPORARY BYPASS: Allow all app navigation without auth checks
+        if (inApp) {
+          console.log("BYPASS: Allowing app navigation");
+          setChecking(false);
+          return;
+        }
 
         // 1) Not logged in -> must go auth
         if (!token) {
+          console.log("No token - redirecting to auth");
           if (inApp && !lock.current) {
             lock.current = true;
             router.replace("/(auth)/login");
@@ -38,8 +49,10 @@ export default function RootLayout() {
 
         // 2) Logged in -> decide online/offline behavior
         const online = await isOnline();
+        console.log("Online status:", online);
 
         if (!online) {
+          console.log("Offline mode - no redirect");
           // OFFLINE MODE
           // allow app screens even without server calls
           // but we need cached wallet for balance UI
@@ -64,6 +77,7 @@ export default function RootLayout() {
 
         // ONLINE MODE -> verify token
         try {
+          console.log("Online mode - verifying token");
           await fetchMe();
 
           // If you have wallet/me endpoint, fetch + cache it:
@@ -71,11 +85,16 @@ export default function RootLayout() {
           // const wallet = walletRes.data || walletRes.wallet || walletRes;
           // await saveCachedWallet(wallet);
 
+          // Only redirect to home if coming from auth, not if already in app
           if (inAuth && !lock.current) {
+            console.log("Coming from auth - redirecting to home");
             lock.current = true;
             router.replace("/(app)/home");
+          } else {
+            console.log("Already in app - no redirect");
           }
         } catch (e) {
+          console.log("Token verification failed:", e);
           await clearToken();
           if (inApp && !lock.current) {
             lock.current = true;

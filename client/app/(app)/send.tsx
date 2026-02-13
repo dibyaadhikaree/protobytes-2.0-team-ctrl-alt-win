@@ -190,7 +190,7 @@ export default function SendMoney() {
         </View>
 
         <Text style={{ color: "rgba(234,224,207,0.55)", fontSize: 12, marginTop: 2 }}>
-          
+          ()
         </Text>
       </View>
 
@@ -214,7 +214,9 @@ export default function SendMoney() {
           </Text>
         </View>
 
-        
+        <Text style={{ color: COLORS.muted, fontSize: 12 }}>
+          Enter using keypad below
+        </Text>
       </View>
 
       {/* Keypad */}

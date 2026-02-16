@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable, Alert } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useNetInfo } from "@react-native-community/netinfo";
+
 import { COLORS } from "../theme/colors";
 import { logoutUser } from "../services/auth";
-import { isOnline } from "../services/network";
-import { getCachedWallet } from "../services/walletCache";
 import { getPendingTxs } from "../offline/queue";
+import { getLocalBalance } from "../services/offlineStore";
+import { getCachedUser } from "../services/sessionStore";
+import { bootstrapOnline } from "../services/onlineBootstrap";
 
 function BigActionCard({
   title,
@@ -67,64 +70,68 @@ function BigActionCard({
 
 export default function Home() {
   const router = useRouter();
+  const netInfo = useNetInfo();
+  const online = !!netInfo.isConnected && !!netInfo.isInternetReachable;
 
-  const [online, setOnline] = useState(false);
-  const [wallet, setWallet] = useState<any>(null);
-  const [points, setPoints] = useState(0);
-  const [loadingLocal, setLoadingLocal] = useState(true);
+  const [userName, setUserName] = useState("User");
+  const [balance, setBalance] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string>("User");
+  const [syncing, setSyncing] = useState(false);
 
-  console.log("HomePage component rendered");
+  const balanceText = useMemo(
+    () => `NPR ${Number(balance || 0).toLocaleString()}`,
+    [balance]
+  );
 
   const loadLocalState = async () => {
+    const user = await getCachedUser();
+
+    console.log("LOCAL STATE ", user);
+    if (user?.name) setUserName(user.name);
+
+    const b = await getLocalBalance();
+    setBalance(b);
+
+    const pending = await getPendingTxs();
+    const pendingOnly = Array.isArray(pending)
+      ? pending.filter((t: any) => t.status === "PENDING_SYNC")
+      : [];
+    setPendingCount(pendingOnly.length);
+  };
+
+  const syncNow = async () => {
+    if (!online) {
+      Alert.alert("Offline", "Internet required to sync.");
+      return;
+    }
     try {
-      const isOnlineStatus = await isOnline();
-      setOnline(isOnlineStatus);
-      console.log("Network status:", isOnlineStatus);
-
-      const cached = await getCachedWallet();
-      setWallet(cached);
-      if (cached?.balance) {
-        setPoints(cached.balance);
-      }
-      if (cached?.name) {
-        setUserName(cached.name);
-      }
+      setSyncing(true);
+      const res = await bootstrapOnline(); // refresh user + wallet + sync
+      await loadLocalState();
       setLastSyncAt(new Date().toLocaleTimeString());
-      console.log("Wallet loaded:", cached);
-
-      // pending queue count
-      const pending = await getPendingTxs();
-      setPendingCount(Array.isArray(pending) ? pending.length : 0);
-    } catch (error) {
-      console.error("Home init error:", error);
-      setPoints(0);
+      Alert.alert(
+        "Synced ✅",
+        `New balance: NPR ${Number(res.balance).toLocaleString()}`
+      );
+    } catch (e: any) {
+      Alert.alert("Sync failed", e?.message || "Could not sync");
     } finally {
-      setLoadingLocal(false);
+      setSyncing(false);
     }
   };
 
-  useEffect(() => {
-    loadLocalState();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadLocalState();
+      if (online) syncNow(); // auto-refresh when online
+    }, [online])
+  );
 
   const onLogout = async () => {
-    // Alert.alert("Logout", "Are you sure you want to logout?", [
-    //   { text: "Cancel", style: "cancel" },
-    //   {
-    //     text: "Logout",
-    //     style: "destructive",
-    //     onPress: async () => {},
-    //   },
-    // ]);
     await logoutUser();
     router.replace("/(auth)/login");
   };
-
-  const balanceText =
-    points === null ? "—" : `NPR ${points.toLocaleString()}`;
 
   return (
     <ScrollView
@@ -133,7 +140,10 @@ export default function Home() {
     >
       {/* Status banner */}
       <Pressable
-        onPress={loadLocalState}
+        onPress={async () => {
+          await loadLocalState();
+          if (online) await syncNow();
+        }}
         style={{
           backgroundColor: online
             ? "rgba(59, 130, 246, 0.12)"
@@ -148,7 +158,7 @@ export default function Home() {
         }}
       >
         <Text style={{ color: COLORS.text, fontWeight: "900" }}>
-          {online ? "ONLINE" : "OFFLINE"}{" "}
+          {online ? "🟢 ONLINE" : "🔴 OFFLINE MODE"}{" "}
           <Text style={{ color: COLORS.muted, fontWeight: "700" }}>
             • Tap to refresh
           </Text>
@@ -160,7 +170,7 @@ export default function Home() {
         </Text>
       </Pressable>
 
-      {/* Top header */}
+      {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <View
           style={{
@@ -203,7 +213,7 @@ export default function Home() {
         </Pressable>
       </View>
 
-      {/* Balance + Points */}
+      {/* Balance card */}
       <View
         style={{
           backgroundColor: COLORS.card,
@@ -211,72 +221,77 @@ export default function Home() {
           borderWidth: 1,
           borderColor: COLORS.border,
           overflow: "hidden",
-          flexDirection: "row",
         }}
       >
-        <View style={{ flex: 1, padding: 16 }}>
-          <Text style={{ color: COLORS.muted, fontSize: 12 }}>Balance</Text>
+        <View style={{ padding: 16 }}>
+          <Text style={{ color: COLORS.muted, fontSize: 12 }}>
+            Offline Balance (usable without internet)
+          </Text>
           <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900" }}>
             {balanceText}
           </Text>
 
-          {points === null && (
-            <Text style={{ color: COLORS.muted, marginTop: 6, fontSize: 12 }}>
-              Go online once to sync your wallet.
-            </Text>
-          )}
-        </View>
-
-        <View style={{ width: 1, backgroundColor: "rgba(148,180,193,0.25)" }} />
-
-        <View style={{ flex: 1, padding: 16 }}>
-          <Text style={{ color: COLORS.muted, fontSize: 12 }}>ChitoPoints</Text>
-          <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900" }}>
-            {points.toLocaleString()}
+          <Text style={{ color: COLORS.muted, marginTop: 6, fontSize: 12 }}>
+            {online
+              ? "Online: server will verify and refresh balance."
+              : "Offline: payments are stored as pending transfers."}
           </Text>
         </View>
+
+        {online && (
+          <Pressable
+            onPress={syncNow}
+            disabled={syncing}
+            style={({ pressed }) => ({
+              borderTopWidth: 1,
+              borderTopColor: "rgba(148,180,193,0.25)",
+              paddingVertical: 14,
+              alignItems: "center",
+              opacity: syncing ? 0.5 : pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ color: COLORS.text, fontWeight: "900" }}>
+              {syncing ? "Syncing..." : "Sync Now"}
+            </Text>
+          </Pressable>
+        )}
       </View>
 
-      {/* Actions (offline allowed) */}
+      {/* Actions */}
       <BigActionCard
         title="Send"
         icon="📤"
-        subtitle="Works offline • creates a pending transfer"
-        onPress={() => {
-          console.log("=== SEND BUTTON CLICKED ===");
-          console.log("Current URL:", window.location.href);
-          console.log("Attempting navigation to /send");
-          router.replace("/(app)/send");
-          console.log("Navigation command sent");
-        }}
+        subtitle="Works offline • creates PLEDGE QR • waits for ACK"
+        onPress={() => router.push("/(app)/send")}
       />
 
       <BigActionCard
         title="Receive"
         icon="📥"
-        subtitle="Works offline • shows My QR"
-        onPress={() => {
-          console.log('Receive button pressed - testing navigation');
-          try {
-            // Try different navigation approaches
-            console.log('Trying router.push with scan-qr...');
-            router.push("/(app)/scan-qr");
-            console.log('Navigation command sent');
-          } catch (error) {
-            console.log('Navigation error:', error);
-            Alert.alert("Error", "Could not open QR scanner");
-          }
-        }}
+        subtitle="Works offline • scan PLEDGE • show ACK QR"
+        onPress={() =>
+          router.push({
+            pathname: "/(app)/scan-qr",
+            params: { mode: "receiver" },
+          })
+        }
       />
 
-      {/* Online-only action */}
+      <BigActionCard
+        title="History"
+        icon="🧾"
+        subtitle="Pending + confirmed transfers"
+        onPress={() => router.push("/(app)/history")}
+      />
+
+      {/* Online-only */}
       <Pressable
         onPress={() => {
           if (!online) {
             Alert.alert("Offline", "Internet required to load from bank.");
             return;
           }
-          Alert.alert("Load from Bank", "Next: implement bank top-up flow");
+          router.push("/(app)/wallet");
         }}
         style={({ pressed }) => ({
           marginTop: 6,
@@ -305,7 +320,7 @@ export default function Home() {
           marginTop: 8,
         }}
       >
-        Offline-first UI • balance from cache • transfers queued when offline
+        Offline-first: cached name + local balance • pending queue • server sync
       </Text>
     </ScrollView>
   );

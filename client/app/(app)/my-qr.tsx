@@ -1,150 +1,106 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Alert, Share } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { COLORS } from "../theme/colors";
-import { generatePaymentQRData } from "../services/qr";
-import QRCode from 'react-native-qrcode-svg';
-import AppButton from "../components/AppButton";
-import { getCachedWallet } from "../services/walletCache";
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, ScrollView, Alert } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import QRCode from "react-native-qrcode-svg";
 
-function formatMoney(n: number) {
-  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-}
+import { COLORS } from "../theme/colors";
+import AppButton from "../components/AppButton";
+import { generatePledgeQR } from "../services/offlinePayment";
+import { getLocalBalance, setLocalBalance } from "../services/offlineStore";
 
 export default function MyQR() {
   const router = useRouter();
-  const { amount } = useLocalSearchParams<{ amount: string }>();
-  const [walletData, setWalletData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { amount } = useLocalSearchParams<{ amount?: string }>();
 
-  const amountNum = useMemo(() => {
-    return Number(amount) || 0;
-  }, [amount]);
+  const amountNum = useMemo(() => Number(amount), [amount]);
 
-  useEffect(() => {
-    console.log("MyQR page mounted with amount:", amount);
-    const loadWallet = async () => {
-      try {
-        setLoading(true);
-        console.log("Loading wallet data...");
-        const data = await getCachedWallet();
-        console.log("Wallet data loaded:", data);
-        setWalletData(data);
-      } catch (error) {
-        console.error("Error loading wallet:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadWallet();
-  }, [amount]);
+  const [qrData, setQrData] = useState<string>("");
+  const [balance, setBalance] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const qrData = useMemo(() => {
-    console.log("Generating QR for amount:", amountNum);
-    
-    // Use real wallet address if available, otherwise dummy
-    const walletAddress = walletData?.address || 'dummy-wallet-address';
-    const data = generatePaymentQRData(amountNum, 'NPR', walletAddress);
-    const qrString = JSON.stringify(data);
-    console.log("QR generated:", qrString);
-    return qrString;
-  }, [amountNum, walletData]);
+  const refresh = async () => {
+    setLoading(true);
+    setQrData("");
 
-  const onShare = async () => {
     try {
-      await Share.share({
-        message: `Send NPR ${formatMoney(amountNum)} - Scan this QR code`,
-      });
-    } catch (error) {
-      console.error('Share error:', error);
+      const b = await getLocalBalance();
+      setBalance(b);
+
+      if (!Number.isFinite(amountNum) || amountNum <= 0) {
+        throw new Error("Invalid amount received. Go back and try again.");
+      }
+
+      // Important: If offline balance isn't set, pledge generation will fail.
+      const pledge = await generatePledgeQR(amountNum);
+      setQrData(pledge);
+    } catch (e: any) {
+      Alert.alert("QR Error", e?.message || "Failed to generate PLEDGE QR");
+    } finally {
+      setLoading(false);
     }
   };
 
-  console.log("MyQR rendering with amount:", amount, "qrData length:", qrData?.length || 0);
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: COLORS.text, fontSize: 16 }}>Loading QR Code...</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amountNum]);
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: COLORS.bg }}
       contentContainerStyle={{ padding: 16, paddingTop: 18, gap: 14 }}
     >
-      {/* Header */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <Pressable onPress={() => router.back()}>
-          <Text style={{ color: COLORS.text, fontSize: 18 }}>←</Text>
-        </Pressable>
-        <Text style={{ color: COLORS.text, fontSize: 20, fontWeight: "900" }}>
-          Payment QR Code
+      <Text style={{ color: COLORS.text, fontSize: 20, fontWeight: "900" }}>
+        My QR (PLEDGE)
+      </Text>
+
+      <View
+        style={{
+          backgroundColor: COLORS.card,
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          padding: 14,
+        }}
+      >
+        <Text style={{ color: COLORS.muted }}>Amount</Text>
+        <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900" }}>
+          {String(amountNum)}
+        </Text>
+
+        <Text style={{ color: COLORS.muted, marginTop: 10 }}>
+          Offline Balance
+        </Text>
+        <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900" }}>
+          {balance}
         </Text>
       </View>
 
-      {/* Amount */}
-      <View style={{ 
-        backgroundColor: COLORS.card, 
-        padding: 16, 
-        borderRadius: 18,
-        alignItems: "center" 
-      }}>
-        <Text style={{ color: COLORS.muted, fontSize: 12 }}>Amount to Pay</Text>
-        <Text style={{ color: COLORS.text, fontSize: 24, fontWeight: "900" }}>
-          NPR {formatMoney(amountNum)}
-        </Text>
+      <View style={{ backgroundColor: "#fff", padding: 14, borderRadius: 12 }}>
+        {loading ? (
+          <Text style={{ color: COLORS.muted }}>Generating QR...</Text>
+        ) : qrData ? (
+          <QRCode value={qrData} size={240} />
+        ) : (
+          <Text style={{ color: COLORS.muted }}>
+            QR not generated (check balance / errors).
+          </Text>
+        )}
       </View>
 
-      {/* QR Code */}
-      <View style={{ 
-        backgroundColor: COLORS.card, 
-        padding: 20, 
-        borderRadius: 18,
-        alignItems: "center" 
-      }}>
-        <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: "900" }}>
-          Scan QR Code
-        </Text>
-        
-        <View style={{ 
-          backgroundColor: "white", 
-          padding: 16, 
-          borderRadius: 12,
-          marginTop: 16 
-        }}>
-          <QRCode 
-            value={qrData} 
-            size={200}
-            color="black"
-            backgroundColor="white"
-          />
-        </View>
+      <AppButton
+        title="Scan Receiver ACK"
+        onPress={() =>
+          router.push({
+            pathname: "/(app)/scan-qr",
+            params: { mode: "sender" },
+          })
+        }
+      />
 
-        <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 12 }}>
-          QR contains payment details for NPR {formatMoney(amountNum)}
-        </Text>
-      </View>
+      {/* TEMP DEV BUTTON — remove later */}
 
-      {/* Debug Info */}
-      <View style={{ 
-        backgroundColor: "rgba(84, 119, 146, 0.10)", 
-        padding: 16, 
-        borderRadius: 14 
-      }}>
-        <Text style={{ color: COLORS.text, fontWeight: "900", fontSize: 14 }}>
-          Debug Info:
-        </Text>
-        <Text style={{ color: COLORS.muted, fontSize: 12 }}>
-          Amount: {amountNum}{'\n'}
-          Wallet: {walletData?.address ? 'Real wallet' : 'Dummy wallet'}{'\n'}
-          QR Length: {qrData?.length || 0}
-        </Text>
-      </View>
-
-      <AppButton title="Share" onPress={onShare} />
+      <AppButton title="Back" onPress={() => router.back()} />
     </ScrollView>
   );
 }

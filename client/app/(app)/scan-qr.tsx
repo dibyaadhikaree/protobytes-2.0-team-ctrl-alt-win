@@ -1,286 +1,206 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-  Dimensions,
-  StatusBar,
-} from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, Alert, Pressable } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { CameraView, Camera } from "expo-camera";
+import { COLORS } from "../theme/colors";
+import { handleScannedQR } from "../services/offlinePayment";
 
-const { width, height } = Dimensions.get('window');
-const SCAN_FRAME_SIZE = width * 0.7;
-
-export default function QRScannerScreen() {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
-  const [cameraActive, setCameraActive] = useState(true);
+export default function ScanQR() {
   const router = useRouter();
+  const { mode } = useLocalSearchParams<{ mode?: "sender" | "receiver" }>();
+  const scanMode = useMemo(
+    () => (mode === "receiver" ? "receiver" : "sender"),
+    [mode]
+  );
 
-  console.log('QRScannerScreen component rendering...');
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scanned, setScanned] = useState(false);
 
   useEffect(() => {
-    console.log('QR Scanner component mounted');
-    if (!permission) {
-      console.log('Requesting camera permission...');
-      requestPermission();
-    } else {
-      console.log('Camera permission status:', permission.granted);
-      if (!permission.granted) {
-        console.log('Camera permission not granted, requesting...');
-        requestPermission();
+    (async () => {
+      try {
+        const { status } = await Camera.requestCameraPermissionsAsync();
+        setHasPermission(status === "granted");
+      } catch (e) {
+        setHasPermission(false);
       }
-    }
-  }, [permission, requestPermission]);
-
-  useEffect(() => {
-    return () => {
-      console.log('QR Scanner component unmounting - cleaning up camera');
-      setScanned(false); // Reset scan state
-      setCameraActive(false); // Deactivate camera
-    };
+    })();
   }, []);
 
-  if (!permission) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.message}>Requesting camera permission...</Text>
-      </View>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.message}>We need your permission to show the camera</Text>
-        <TouchableOpacity style={styles.button} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Grant permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+  const onScanned = async (data: string) => {
     if (scanned) return;
-    
     setScanned(true);
-    
-    // Vibrate to indicate successful scan
-    try {
-      // You can add haptic feedback here if needed
-    } catch (error) {
-      console.log('Haptic feedback not available');
-    }
 
-    // Handle the scanned QR code data
-    Alert.alert(
-      'QR Code Scanned',
-      `Data: ${data}`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => setScanned(false),
-        },
-        {
-          text: 'Process',
-          onPress: () => {
-            // Process the QR code data here
-            console.log('Processing QR data:', data);
-            // Navigate to payment or processing screen
-            // router.push('/payment-process');
-            setScanned(false);
+    try {
+      const result = await handleScannedQR(scanMode, data);
+
+      if (result.action === "SHOW_ACK") {
+        router.replace({
+          pathname: "/(app)/qr-display",
+          params: {
+            title: "Show ACK QR",
+            subtitle: "Let the sender scan this to complete payment",
+            qr: encodeURIComponent(result.ackString),
           },
-        },
-      ]
-    );
-  };
+        });
+        return;
+      }
 
-  const goBack = () => {
-    console.log('Back button pressed');
-    try {
-      console.log('Attempting to navigate to home...');
-      // Stop camera and cleanup before navigation
-      setScanned(false); // Reset scan state
-      setCameraActive(false); // Deactivate camera
-      router.push('/(app)/home');
-    } catch (error) {
-      console.log('Navigation error:', error);
-      router.back();
+      if (result.action === "FINALIZED") {
+        Alert.alert("Success ✅", "Payment completed offline. Pending sync.");
+        router.replace("/(app)/home");
+        return;
+      }
+
+      Alert.alert("Done", "QR processed.");
+      router.replace("/(app)/home");
+    } catch (e: any) {
+      Alert.alert("Scan Error", e?.message || "Could not process scanned QR");
+      setScanned(false);
     }
   };
+
+  if (hasPermission === null) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: COLORS.bg,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text style={{ color: COLORS.text }}>
+          Requesting camera permission…
+        </Text>
+      </View>
+    );
+  }
+
+  if (hasPermission === false) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: COLORS.bg,
+          padding: 16,
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+        }}
+      >
+        <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900" }}>
+          Camera Permission Needed
+        </Text>
+        <Text style={{ color: COLORS.muted, textAlign: "center" }}>
+          Enable camera permission to scan QR codes.
+        </Text>
+
+        <Pressable
+          onPress={async () => {
+            const { status } = await Camera.requestCameraPermissionsAsync();
+            setHasPermission(status === "granted");
+          }}
+          style={{
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+          }}
+        >
+          <Text style={{ color: COLORS.text, fontWeight: "800" }}>
+            Grant Permission
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => router.back()}
+          style={{ paddingVertical: 10 }}
+        >
+          <Text style={{ color: COLORS.muted }}>Back</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={goBack}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>QR Scanner</Text>
-        <View style={styles.placeholder} />
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      <CameraView
+        style={{ flex: 1 }}
+        barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+        onBarcodeScanned={({ data }) => onScanned(String(data))}
+      />
+
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          paddingTop: 18,
+          paddingHorizontal: 16,
+          paddingBottom: 12,
+          backgroundColor: "rgba(0,0,0,0.35)",
+        }}
+      >
+        <Text style={{ color: "#fff", fontSize: 18, fontWeight: "900" }}>
+          {scanMode === "receiver" ? "Scan PLEDGE QR" : "Scan ACK QR"}
+        </Text>
+        <Text
+          style={{
+            color: "rgba(255,255,255,0.75)",
+            marginTop: 4,
+            fontSize: 12,
+          }}
+        >
+          {scanMode === "receiver"
+            ? "Point camera at sender QR to receive money."
+            : "Point camera at receiver ACK to finalize sending."}
+        </Text>
       </View>
 
-      {/* Camera View */}
-      {cameraActive && (
-        <CameraView
-          style={styles.camera}
-          barcodeScannerSettings={{
-            barcodeTypes: ['qr'],
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: 16,
+          backgroundColor: "rgba(0,0,0,0.35)",
+          flexDirection: "row",
+          gap: 12,
+        }}
+      >
+        <Pressable
+          onPress={() => router.back()}
+          style={{
+            flex: 1,
+            paddingVertical: 12,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.25)",
+            alignItems: "center",
           }}
-          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-        />
-      )}
+        >
+          <Text style={{ color: "#fff", fontWeight: "800" }}>Back</Text>
+        </Pressable>
 
-      {/* Overlay */}
-      <View style={styles.overlay}>
-        {/* Instruction Text */}
-        <Text style={styles.instructionText}>scan QR code to pay</Text>
-
-        {/* Scanning Frame */}
-        <View style={styles.scanFrameContainer}>
-          <View style={styles.scanFrame}>
-            {/* Corner brackets */}
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
-          </View>
-        </View>
-
-        {/* Reset button if scanned */}
-        {scanned && (
-          <TouchableOpacity
-            style={styles.resetButton}
-            onPress={() => setScanned(false)}
-          >
-            <Text style={styles.resetButtonText}>Scan Again</Text>
-          </TouchableOpacity>
-        )}
+        <Pressable
+          onPress={() => setScanned(false)}
+          style={{
+            flex: 1,
+            paddingVertical: 12,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.25)",
+            alignItems: "center",
+            opacity: scanned ? 1 : 0.7,
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "800" }}>Scan Again</Text>
+        </Pressable>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
-    backgroundColor: '#000000',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  placeholder: {
-    width: 40,
-  },
-  camera: {
-    flex: 1,
-  },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  instructionText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 40,
-    fontWeight: '500',
-  },
-  scanFrameContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scanFrame: {
-    width: SCAN_FRAME_SIZE,
-    height: SCAN_FRAME_SIZE,
-    position: 'relative',
-  },
-  corner: {
-    position: 'absolute',
-    width: 30,
-    height: 30,
-    borderColor: '#FFFFFF',
-  },
-  topLeft: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-  },
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-  },
-  resetButton: {
-    marginTop: 40,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  resetButtonText: {
-    color: '#000000',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  message: {
-    textAlign: 'center',
-    paddingBottom: 10,
-    color: '#FFFFFF',
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#FFFFFF',
-    padding: 10,
-    borderRadius: 5,
-  },
-  buttonText: {
-    color: '#000000',
-    textAlign: 'center',
-  },
-});

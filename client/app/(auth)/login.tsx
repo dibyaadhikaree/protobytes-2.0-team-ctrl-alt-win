@@ -12,21 +12,26 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const [loading, setLoading] = useState(false);
+
   const onLogin = async () => {
-    console.log("Login button clicked ");
     try {
       if (!email.trim() || password.length < 4) {
         Alert.alert("Invalid", "Enter email and password (min 4 chars).");
         return;
       }
 
+      setLoading(true);
       await loginUser({ email: email.trim(), password });
-      Alert.alert("Logged in ✅", "Token saved on device.");
+      Alert.alert("Logged in ✅", "Wallet cached for offline payments.");
       router.replace("/(app)/home");
     } catch (e: any) {
-      Alert.alert("Login failed", e.message || "Something went wrong");
+      Alert.alert("Login failed", e?.message || "Something went wrong");
+    } finally {
+      setLoading(false);
     }
   };
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: COLORS.bg }}
@@ -80,7 +85,7 @@ export default function Login() {
           placeholder="••••••••"
         />
 
-        <AppButton title="Login" onPress={onLogin} />
+        <AppButton title="Login" onPress={onLogin} loading={loading} />
 
         <Pressable
           onPress={() =>

@@ -1,242 +1,129 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Alert } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import {
+  View,
+  Text,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import { useRouter } from "expo-router";
-import { COLORS } from "../theme/colors";
+import { useFocusEffect } from "@react-navigation/native";
+
 import AppButton from "../components/AppButton";
-import Keypad from "../components/Keypad";
+import AppInput from "../components/AppInput";
+import { COLORS } from "../theme/colors";
+import { getLocalBalance } from "../services/offlineStore";
 
-type RecentTx = { name: string; amount: number };
-
-function formatMoney(n: number) {
-  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-}
-
-export default function SendMoney() {
+export default function Send() {
   const router = useRouter();
 
-  useEffect(() => {
-    console.log("Send page loaded successfully");
-  }, []);
+  const [amount, setAmount] = useState<string>("");
+  const [balance, setBalance] = useState<number>(0);
+  const [loadingBal, setLoadingBal] = useState<boolean>(true);
 
-  // demo data (later load from storage)
-  const balance = 12345.5;
+  const amountNum = useMemo(() => Number(amount), [amount]);
 
-  const recent: RecentTx[] = [
-    { name: "Suman", amount: 500 },
-    { name: "Riya", amount: 1200 },
-    { name: "Aayush", amount: 250 },
-  ];
+  // ✅ Always refresh balance when screen is focused (important after offline tx)
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
 
-  const [hideBalance, setHideBalance] = useState(false);
-  const [amountStr, setAmountStr] = useState(""); // store as string to control keypad
+      const load = async () => {
+        try {
+          setLoadingBal(true);
+          const b = await getLocalBalance();
+          // console.log("get local balance on send screen" , );
+          if (mounted) setBalance(b);
+        } catch (e) {
+          // keep silent, but you can Alert if needed
+        } finally {
+          if (mounted) setLoadingBal(false);
+        }
+      };
 
-  const amountNum = useMemo(() => {
-    const n = Number(amountStr);
-    if (amountStr === '') return 0;
-    if (Number.isNaN(n)) return 0;
-    return n;
-  }, [amountStr]);
-
-  const displayBalance = useMemo(() => {
-    if (hideBalance) return "NPR ••••.••";
-    return `NPR ${formatMoney(balance)}`;
-  }, [hideBalance, balance]);
-
-  const displayAmount = useMemo(() => {
-    if (!amountStr) return "0";
-    return amountStr;
-  }, [amountStr]);
-
-  const onPressDigit = (d: string) => {
-    // prevent leading zeros like "000"
-    if (amountStr === '') {
-      setAmountStr(d);
-      return;
-    }
-
-    // limit length
-    if (amountStr.length >= 10) return;
-
-    setAmountStr((prev) => prev + d);
-  };
-
-  const onDot = () => {
-    if (amountStr.includes(".")) return;
-    if (!amountStr) {
-      setAmountStr("0.");
-      return;
-    }
-    setAmountStr((prev) => prev + ".");
-  };
-
-  const onBackspace = () => {
-    setAmountStr((prev) => prev.slice(0, -1));
-  };
+      load();
+      return () => {
+        mounted = false;
+      };
+    }, [])
+  );
 
   const onContinue = () => {
-    console.log("Continue button clicked, amount:", amountNum);
-    
-    if (amountNum <= 0) {
-      Alert.alert("Invalid amount", "Enter amount to send.");
+    console.log("continue clicked", balance);
+    const trimmed = amount.trim();
+    const n = Number(trimmed);
+
+    if (!trimmed) {
+      Alert.alert("Enter amount", "Please enter an amount to send.");
       return;
     }
-    if (amountNum > balance) {
-      Alert.alert("Insufficient balance", "Your balance is not enough.");
+    if (!Number.isFinite(n) || n <= 0) {
+      Alert.alert(
+        "Invalid amount",
+        "Please enter a valid amount greater than 0."
+      );
+      return;
+    }
+    if (n > balance) {
+      Alert.alert(
+        "Insufficient balance",
+        `Your offline balance is ${balance}.`
+      );
       return;
     }
 
-    console.log("Navigating to QR page...");
-    // Navigate to separate QR page with amount
-    router.push(`/(app)/my-qr?amount=${amountNum.toString()}`);
+    // ✅ Pass amount as query param so my-qr can generate pledge QR
+    router.push(`/(app)/my-qr?amount=${encodeURIComponent(String(n))}`);
   };
 
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: COLORS.bg }}
-      contentContainerStyle={{ padding: 16, paddingTop: 18, gap: 14 }}
-      keyboardShouldPersistTaps="handled"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* Header row */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <Pressable
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/(app)/home');
-            }
-          }}
-          style={({ pressed }) => ({
-            width: 44,
-            height: 44,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-            alignItems: "center",
-            justifyContent: "center",
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900" }}>←</Text>
-        </Pressable>
-
+      <View style={{ flex: 1, padding: 16, gap: 14, paddingTop: 18 }}>
         <Text style={{ color: COLORS.text, fontSize: 20, fontWeight: "900" }}>
-          Send Money
+          Send Money (Offline)
         </Text>
-      </View>
 
-      {/* Balance card */}
-      <View
-        style={{
-          backgroundColor: COLORS.card,
-          borderRadius: 18,
-          borderWidth: 1,
-          borderColor: COLORS.border,
-          padding: 16,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: COLORS.muted, fontSize: 12 }}>Balance</Text>
-          <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: "900", marginTop: 4 }}>
-            {displayBalance}
-          </Text>
-        </View>
-
-        <Pressable
-          onPress={() => setHideBalance((s) => !s)}
-          style={({ pressed }) => ({
-            paddingVertical: 10,
-            paddingHorizontal: 14,
-            borderRadius: 14,
+        <View
+          style={{
+            backgroundColor: COLORS.card,
+            borderRadius: 18,
             borderWidth: 1,
             borderColor: COLORS.border,
-            backgroundColor: "rgba(84, 119, 146, 0.20)",
-            opacity: pressed ? 0.85 : 1,
-          })}
+            padding: 14,
+          }}
         >
-          <Text style={{ color: COLORS.text, fontWeight: "800" }}>
-            {hideBalance ? "Show" : "Hide"}
+          <Text style={{ color: COLORS.muted, marginBottom: 6 }}>
+            Available Offline Balance
           </Text>
-        </Pressable>
-      </View>
-
-      {/* Recent transfers (view-only, not clickable) */}
-      <View
-        style={{
-          backgroundColor: COLORS.card,
-          borderRadius: 18,
-          borderWidth: 1,
-          borderColor: COLORS.border,
-          padding: 16,
-          gap: 10,
-        }}
-      >
-        <Text style={{ color: COLORS.text, fontWeight: "900", fontSize: 14 }}>
-          Recent fund transfers
-        </Text>
-
-        <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-          {recent.map((r) => (
-            <View
-              key={r.name}
-              // IMPORTANT: This is NOT Pressable => cannot click
-              style={{
-                minWidth: "30%",
-                backgroundColor: "rgba(148, 180, 193, 0.10)",
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: COLORS.border,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-              }}
-            >
-              <Text style={{ color: COLORS.text, fontWeight: "900" }}>{r.name}</Text>
-              <Text style={{ color: COLORS.muted, marginTop: 4 }}>
-                NPR {formatMoney(r.amount)}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        <Text style={{ color: "rgba(234,224,207,0.55)", fontSize: 12, marginTop: 2 }}>
-          ()
-        </Text>
-      </View>
-
-      {/* Amount row */}
-      <View
-        style={{
-          backgroundColor: COLORS.card,
-          borderRadius: 18,
-          borderWidth: 1,
-          borderColor: COLORS.border,
-          padding: 16,
-          gap: 8,
-        }}
-      >
-        <Text style={{ color: COLORS.muted, fontSize: 12 }}>Send Amount</Text>
-
-        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 10 }}>
-          <Text style={{ color: COLORS.text, fontSize: 22, fontWeight: "900" }}>Rs.</Text>
-          <Text style={{ color: COLORS.text, fontSize: 28, fontWeight: "900" }}>
-            {displayAmount}
+          <Text style={{ color: COLORS.text, fontSize: 22, fontWeight: "900" }}>
+            {loadingBal ? "Loading..." : balance.toString()}
           </Text>
         </View>
+
+        <AppInput
+          label="Amount"
+          value={amount}
+          onChangeText={setAmount}
+          placeholder="e.g. 250"
+          keyboardType="numeric"
+        />
+
+        <AppButton
+          title="Continue"
+          onPress={onContinue}
+          disabled={
+            !amount.trim() || !Number.isFinite(amountNum) || amountNum <= 0
+          }
+        />
 
         <Text style={{ color: COLORS.muted, fontSize: 12 }}>
-          Enter using keypad below
+          Next: You’ll show a PLEDGE QR. The receiver scans it and shows an ACK
+          QR. Then you scan the ACK to finalize the payment offline.
         </Text>
       </View>
-
-      {/* Keypad */}
-      <Keypad onPressDigit={onPressDigit} onBackspace={onBackspace} onDot={onDot} />
-
-      {/* Continue button */}
-      <AppButton title="Continue" onPress={onContinue} />
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

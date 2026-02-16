@@ -17,11 +17,13 @@ app.use(express.static(path.join(__dirname, "public")));
 const indexRouter = require("./routes/indexRoute");
 const authRouter = require("./routes/authRoute");
 const walletRouter = require("./routes/walletRoute");
+const offlineRouter = require("./routes/offlineRoute");
 const errorController = require("./controllers/errorController");
 
 app.use("/", indexRouter);
 app.use("/auth", authRouter);
 app.use("/wallet", walletRouter);
+app.use("/offline", offlineRouter);
 
 //for catching all the errors
 app.all("*", (req, res, next) => {
